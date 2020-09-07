@@ -57,7 +57,7 @@ def encode_morse(text,wpm):
     """Protocol description:
     This may be compatible with the morserino protocol
 
-    
+
     protocolversion: 2 bits
     serial number: 6 bits
     morse speed: 6 bits
@@ -110,7 +110,7 @@ def decode_header(unicodestring):
         integer = ord(byte)
         #bitstring += f'{integer:08b}'
         bitstring += zfill(bin(integer)[2:],8) #works in uPython
-    
+
     m_protocol = int(bitstring[:2],2)
     m_serial = int(bitstring[3:8],2)
     m_wpm = int(bitstring[9:14],2)
@@ -125,7 +125,7 @@ def decode_payload(unicodestring):
         integer = ord(byte)
         #bitstring += f'{integer:08b}'
         bitstring += zfill(bin(integer)[2:],8) #works in uPython
-        
+
     m_payload = bitstring[14:] #we just need the payload here
 
     text = ''
@@ -136,10 +136,10 @@ def decode_payload(unicodestring):
 
         if sym == '01': #a dit
             charbuffer += '.'
-            
+
         elif sym == '10': #a dah
             charbuffer += '-'
-            
+
         elif sym == '00': #eoc
             rec=0
             for key,value in morse.items():
@@ -150,7 +150,7 @@ def decode_payload(unicodestring):
                     break
             if not rec: #unknown character
                 text += '*'
-                
+
         elif sym == '11': #eow
             rec=0
             for key,value in morse.items():
@@ -164,11 +164,10 @@ def decode_payload(unicodestring):
 
             return text
 
-        
 
 class ipcwSocket():
 
-    def __init__(self,url=('0.0.0.0',7373),timeout=10):
+    def __init__(self,url=('0.0.0.0',7373),timeout=1):
         self.serversock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
         self.serversock.bind(url)
         self.serversock.settimeout(timeout)
@@ -185,7 +184,7 @@ class ipcwSocket():
         try:
             data = self.serversock.recv(64)
         except:
-            print("timeout")
+	#
         if data:
             #return[decode_header(data),decode_payload(data)]
             return data
@@ -193,11 +192,9 @@ class ipcwSocket():
 if __name__ == "__main__":
     print(decode_payload(encode_morse('DJ5?E/p',20)))
     print(decode_header(encode_morse('DJ5?E/p',20)))
-    #s = ipcwSocket()
-    #s.sendto(encode_morse('servertest',20),('255.255.255.255',7373))
+    s = ipcwSocket()
+    s.sendto(encode_morse('servertest',20),('255.255.255.255',7373))
     #s.sendto(encode_morse('DJ5SE',20),('192.168.178.36',7373))
 
-    time.sleep(0)
-    #print(s.recv())
-    
-
+    time.sleep(1)
+    print(decode_payload(s.recv()))
