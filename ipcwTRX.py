@@ -22,6 +22,10 @@ tx_sidetone = 550.0
 rx_sidetone = 600.0
 txrx_delay = 500 #ms
 
+###Pins####
+sidetone_pin = 15
+left_paddle_pin = 1
+right_paddle_pin = 2
 ###########
 # state variables #
 ip_address = None #own ip address, will be set by setup_server function
@@ -31,7 +35,6 @@ dit_down = False
 dah_down = False
 last_lever_down = None
 last_key_time=None
-
 ###########
 
 def setup_network(ssid='ipcw_ap', key='ipcw'):

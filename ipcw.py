@@ -29,12 +29,22 @@ def debug(s):
         print(s)
 
 
+#make own zfill for uPython
 def zfill(str,digits):
     '''we need to implement our own zfill for uPython)'''
     if len(str)>=digits:
         return str
     else:
         return ((digits - len(str)) * '0')+str
+
+
+#make own ljust for uPython
+def ljust(string, width, fillchar=' '):
+    '''returns the str left justified, remaining space to the right is filed with fillchar, if str is shorter then width, original string is returned '''
+    while len(string) < width:
+        string += fillchar
+    return string
+
 
 def ditlen(wpm):
     '''calculates the length in ms of a morse code element for given words per minute'''
@@ -80,7 +90,7 @@ def encode_morse(text,wpm):
         m += '00' #End of character
     m = m[0:-2] + '11' #End of word
 
-    m = m.ljust(int(8*ceil(len(m)/8.0)),'0') #fill in incomplete byte
+    m = ljust(m,int(8*ceil(len(m)/8.0)),'0') #fill in incomplete byte
 
     res = ''
     for i in range(0, len(m),8):
@@ -98,7 +108,8 @@ def decode_header(unicodestring):
 
     for byte in bytestring:
         integer = ord(byte)
-        bitstring += f'{integer:08b}'
+        #bitstring += f'{integer:08b}'
+        bitstring += zfill(bin(integer)[2:],8) #works in uPython
     
     m_protocol = int(bitstring[:2],2)
     m_serial = int(bitstring[3:8],2)
@@ -112,7 +123,8 @@ def decode_payload(unicodestring):
     bitstring = ''
     for byte in bytestring:
         integer = ord(byte)
-        bitstring += f'{integer:08b}'
+        #bitstring += f'{integer:08b}'
+        bitstring += zfill(bin(integer)[2:],8) #works in uPython
         
     m_payload = bitstring[14:] #we just need the payload here
 
@@ -157,10 +169,10 @@ def decode_payload(unicodestring):
 class ipcwSocket():
 
     def __init__(self,url=('0.0.0.0',7373),timeout=10):
-        self.serversock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        self.serversock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
         self.serversock.bind(url)
         self.serversock.settimeout(timeout)
-        self.serversock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
+        #self.serversock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
         debug("Server created")
 
 
@@ -171,7 +183,7 @@ class ipcwSocket():
         data=None
         try:
             data = self.serversock.recv(64)
-        except socket.timeout:
+        except:
             print("timeout")
         if data:
             return[decode_header(data),decode_payload(data)]
