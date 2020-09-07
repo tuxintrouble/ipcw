@@ -6,7 +6,7 @@
 
 #This file implements funktions for cw over the UDP protocol
 
-import socket, time
+import socket, time, os
 from math import ceil
 
 DEBUG=0
@@ -48,7 +48,7 @@ def ljust(string, width, fillchar=' '):
 
 def ditlen(wpm):
     '''calculates the length in ms of a morse code element for given words per minute'''
-    return 60000 / (50*wpm) #60000s / (50 elements (as in PARIS) * WPM)
+    return int(60000 / (50*wpm)) #60000s / (50 elements (as in PARIS) * WPM)
 
 
 def encode_morse(text,wpm):
@@ -172,7 +172,8 @@ class ipcwSocket():
         self.serversock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
         self.serversock.bind(url)
         self.serversock.settimeout(timeout)
-        #self.serversock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
+        if not os.uname()[0].startswith("esp"): #disable for ESP systems
+            self.serversock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, True)
         debug("Server created")
 
 
@@ -186,13 +187,17 @@ class ipcwSocket():
         except:
             print("timeout")
         if data:
-            return[decode_header(data),decode_payload(data)]
+            #return[decode_header(data),decode_payload(data)]
+            return data
 
 if __name__ == "__main__":
     print(decode_payload(encode_morse('DJ5?E/p',20)))
     print(decode_header(encode_morse('DJ5?E/p',20)))
     s = ipcwSocket()
-    s.sendto(encode_morse('servertest',20),('255.255.255.255',7373))
+    #s.sendto(encode_morse('servertest',20),('255.255.255.255',7373))
+    s.sendto(encode_morse('DJ5SE\p',20),('192.168.178.36',7373))
+
     time.sleep(0)
     print(s.recv())
+    
 
