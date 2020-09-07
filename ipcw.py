@@ -193,11 +193,11 @@ class ipcwSocket():
 if __name__ == "__main__":
     print(decode_payload(encode_morse('DJ5?E/p',20)))
     print(decode_header(encode_morse('DJ5?E/p',20)))
-    s = ipcwSocket()
+    #s = ipcwSocket()
     #s.sendto(encode_morse('servertest',20),('255.255.255.255',7373))
-    s.sendto(encode_morse('DJ5SE\p',20),('192.168.178.36',7373))
+    #s.sendto(encode_morse('DJ5SE',20),('192.168.178.36',7373))
 
     time.sleep(0)
-    print(s.recv())
+    #print(s.recv())
     
 
