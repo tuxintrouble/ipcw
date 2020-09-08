@@ -182,12 +182,12 @@ class ipcwSocket():
     def recv(self):
         data=None
         try:
-            data = self.serversock.recv(64)
+        	data = self.serversock.recv(64)
         except:
-	#
-        if data:
-            #return[decode_header(data),decode_payload(data)]
-            return data
+        	pass
+		if data:
+			#return[decode_header(data),decode_payload(data)]
+			return data
 
 if __name__ == "__main__":
     print(decode_payload(encode_morse('DJ5?E/p',20)))

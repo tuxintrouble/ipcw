@@ -144,10 +144,10 @@ def right_paddle_released():
 
 def process_paddles():
     '''check key pins for changes and change states, called by mainloop'''
-	global left_paddle_closed
-	global right_paddle_close
-	global last_paddle_closed
-	global last_paddle_released
+    global left_paddle_closed
+    global right_paddle_close
+    global last_paddle_closed
+    global last_paddle_released
 
     if left_paddle() and not left_paddle_closed:
     	left_paddle_pressed()
@@ -169,7 +169,7 @@ def process_paddles():
     	right_paddle_released()
     	right_paddle_closed = False
     	last_key_time=time.ticks_ms()
- 		last_paddle_released = 'right'
+    	last_paddle_released = 'right'
 
 def process_keyer_buffer():
 	'''handles complete words, depending on what mode we are in. Only called by process_keyer()'''
@@ -188,7 +188,7 @@ def process_keyer_buffer():
 				play_string_as_morse('e',900,25)
 			else:
 				mode = 2 #go in tx mode
-				#send it - we need to implement a new encode_morse function  to deal with binary elements
+				#TODO: send it - we need to implement a new encode_morse function  to deal with binary elements
 			pass
 		elif mode == 3:
 			#handle menu commands here
@@ -200,9 +200,9 @@ def process_keyer_buffer():
 						global current_channel
 						if keyer_buffer == '?': #tell QRG
 							play_string_as_morse(current_channel, cmd_sidetone, wpm)
-						elif keyerbuffer and not len([i for i in keyerbuffer if not i.isdigit()]) #contains only numbers  #channel numbers
-							global = channels
-							if 0 <= int(keyer_buffer)-1 <= len(channels): #check if channel number is valid!!!
+						elif keyerbuffer and not len([i for i in keyerbuffer if not i.isdigit()]): #contains only numbers  #channel numbers
+							global channels
+							if int(keyer_buffer)-1 >=0 and int(keyer_buffer)-1 <= len(channels): #check if channel number is valid!!!
 								current_channel = int(keyer_buffer)-1
 								play_string_as_morse('r qrg %i %s' %(current_channel,channels[current_channel][0]), cmd_sidetone, wpm) #channel  no and name
 							else:
@@ -220,9 +220,9 @@ def process_keyer_buffer():
 						elif keyer_buffer == 'a': #go to accesspoint mode
 							pass #TODO execute setup network with 'a'
 							play_string_as_morse('r ap', cmd_sidetone, wpm)
-						elif keyer_buffer and not len([i for i in keyerbuffer if not i.isdigit()]) #contains only numbers  #network numbers
-							global = networks
-							if 0 <= int(keyer_buffer)-1 <= len(channels): #check if channel number is valid
+						elif keyer_buffer and not len([i for i in keyerbuffer if not i.isdigit()]): #contains only numbers  #network numbers
+							global networks
+							if int(keyer_buffer)-1 >= 0 and int(keyer_buffer)-1 <= len(channels): #check if channel number is valid
 								if not current_network == int(keyer_buffer)-1:
 									current_network = int(keyer_buffer)-1
 									#TODO: excute setup network with entry number' '
@@ -237,11 +237,10 @@ def process_keyer_buffer():
 
 
 					if exec_cmd == 'wpm':
-						global wpm
 						if keyer_buffer == '?': #tell wpm
 							play_string_as_morse(wpm, cmd_sidetone, wpm) 
-						elif keyerbuffer and not len([i for i in keyerbuffer if not i.isdigit()]) #contains only numbers
-							if 4 < int(keyer_buffer) > 80:
+						elif keyerbuffer and not len([i for i in keyerbuffer if not i.isdigit()]): #contains only numbers
+							if  int(keyer_buffer) >= 5 and int(keyer_buffer) <= 80:
 								wpm = int(keyer_buffer)
 								play_string_as_morse('wpm %i' %wpm, cmd_sidetone, wpm)
 							else:
@@ -256,8 +255,8 @@ def process_keyer_buffer():
 						global tx_sidetone
 						if keyer_buffer == '?': #tell tx tone freq
 							play_string_as_morse(tx_sidetone, cmd_sidetone, wpm) 
-						elif keyerbuffer and not len([i for i in keyerbuffer if not i.isdigit()]) #contains only numbers
-							if 100 < int(keyer_buffer) > 900:
+						elif keyerbuffer and not len([i for i in keyerbuffer if not i.isdigit()]): #contains only numbers
+							if  int(keyer_buffer) >= 100 and int(keyer_buffer) <= 900:
 								tx_sidetone = int(keyer_buffer)
 								play_string_as_morse('txt %i' %tx_sidetone, cmd_sidetone, wpm)
 							else:
@@ -273,8 +272,8 @@ def process_keyer_buffer():
 						global rx_sidetone
 						if keyer_buffer == '?': #tell tx tone freq
 							play_string_as_morse(rx_sidetone, cmd_sidetone, wpm) 
-						elif keyerbuffer and not len([i for i in keyerbuffer if not i.isdigit()]) #contains only numbers
-							if 100 < int(keyer_buffer) > 900:
+						elif keyerbuffer and not len([i for i in keyerbuffer if not i.isdigit()]): #contains only numbers
+							if int(keyer_buffer) <= 100 and  int(keyer_buffer) <= 900:
 								rx_sidetone = int(keyer_buffer)
 								play_string_as_morse('rxt %i' %rx_sidetone, cmd_sidetone, wpm)
 							else:
@@ -287,11 +286,10 @@ def process_keyer_buffer():
 
 
 					if exec_cmd == 'cmdt':
-						global cmd_sidetone
 						if keyer_buffer == '?': #tell tx tone freq
 							play_string_as_morse(cmd_sidetone, cmd_sidetone, wpm) 
-						elif keyerbuffer and not len([i for i in keyerbuffer if not i.isdigit()]) #contains only numbers
-							if 100 < int(keyer_buffer) > 900:
+						elif keyerbuffer and not len([i for i in keyerbuffer if not i.isdigit()]): #contains only numbers
+							if int(keyer_buffer) <=100 and  int(keyer_buffer) <= 900:
 								cmd_sidetone = int(keyer_buffer)
 								play_string_as_morse('txt %i' %cmd_sidetone, cmd_sidetone, wpm)
 							else:
@@ -377,31 +375,31 @@ def process_keyer(caller):
 		last_key_time = None
 	#TODO: iambic modes??? 
 
-	if mode == 3 and  if cmd_entered_time and time.ticks_ms() >= cmd_entered_time + 10000: #comand mode for longer than 10secs?
+	if mode == 3 and cmd_entered_time and time.ticks_ms() >= cmd_entered_time + 10000: #comand mode for longer than 10secs?
 		mode = 1 #go back to rx mode
 		sidetone(cmd_sidetone,200) #emit 200ms tone
 		cmd_entered_time = None
 
 
 def play_string_as_morse(string, freq, wpm):
-    '''plays the given string as morse code'''
-    ell=ditlen(wpm)
-    for c in string:
-        if c ==' ':
-            time.sleep_ms(ell*6) #wordspacing
-            debug('<space>')
-        else:
-            debug(c)
-            for e in morse[c.lower()]:
-                if e == '.':
-                    sidetone(freq,ell)
-                    time.sleep_ms(ell)
-                    debug(e)
-                else:
-                    sidetone(freq,ell*3)
-                    time.sleep_ms(ell)
-                    debug(e)
-            time.sleep_ms(ell*2) #charcter spacing only 2x because we have a charspace already
+	'''plays the given string as morse code'''
+	ell=ditlen(wpm)
+	for c in string:
+		if c ==' ':
+			time.sleep_ms(ell*6) #wordspacing
+			debug('<space>')
+		else:
+			debug(c)
+			for e in morse[c.lower()]:
+				if e == '.':
+					sidetone(freq,ell)
+					time.sleep_ms(ell)
+					debug(e)
+				else:
+					sidetone(freq,ell*3)
+					time.sleep_ms(ell)
+					debug(e)
+			time.sleep_ms(ell*2) #charcter spacing only 2x because we have a charspace already
 
 
 def play_recvd(unicodestring):
@@ -424,7 +422,7 @@ def play_recvd(unicodestring):
     #changed sleep times  for compatibility with nonblocking sidetone, blocking through receiving a word
     for i in range(0, len(m_payload),2):
         sym = m_payload[i]+m_payload[i+1]
-       debug(sym)
+        debug(sym)
         if sym == '01': #a dit
             sidetone(rx_sidetone,ell)
             time.sleep_ms(ell*2) #dit+space
@@ -439,7 +437,7 @@ def play_recvd(unicodestring):
         else:
             pass
 
-def receive()
+def receive():
 	'''checks for incomming messages and receives them '''
 	global mode
 	global ipcwsocket
