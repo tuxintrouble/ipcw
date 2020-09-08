@@ -25,6 +25,8 @@ rx_sidetone = 600
 volume=500 #50%
 txrx_delay = 500 #ms
 
+channels = [['255.255.255.255',7373,'LAN']]
+
 ### Pins ###
 sidetone_pin = 12
 left_paddle_pin = 5
@@ -37,9 +39,11 @@ right_paddle = machine.Pin(right_paddle_pin, mode=machine.Pin.IN, pull=machine.P
 ###########
 # state variables #
 ip_address = None #own ip address, will be set by setup_server function
-state_tx = False #are we sending?
 state_menu = False #are we in the menu?
-
+mode = 0 #0 off, 1 rx, 1 tx, 3 cmd
+exec_cmd = None
+cmd_entered_time = None
+current_channel=1
 left_paddle_closed = False
 right_paddle_closed = False
 last_paddle_closed = None
@@ -52,7 +56,7 @@ silence_stop_time=None
 ipcwsocket = None
 ###########
 
-def setup_network():
+def setup_network(): #TODO: change to take 'a' or network number int as argument and to user networks[[ssid,key,authmode]]
     global ip_address
     sta_if = network.WLAN(network.STA_IF)
     ap_if = network.WLAN(network.AP_IF)
@@ -170,15 +174,167 @@ def process_paddles():
 def process_keyer_buffer():
 	'''handles complete words, depending on what mode we are in. Only called by process_keyer()'''
 	global keyer_buffer
+	global mode
+	global exec_cmd
+	global cmd_entered_time
 
 	if keyer_buffer != '':
-		#todo: check if we are in menu mode so see where the word must go
-		#todo: encoding for sending through  socket
-		if status_tx:
-			#send it - we need to implement a new encode_morse finction  to deal with binary elements
+		#check if we are in menu mode so see where the word must go
+		#0 off 1 rx 2 tx 3 cmd
+		if mode == 1: #are we in rx mode?
+			if keyer_buffer == '0101011101010111': # ..._... for cmd mode
+				mode=3
+				cmd_entered_time = time.ticks_ms()
+				play_string_as_morse('e',900,25)
+			else:
+				mode = 2 #go in tx mode
+				#send it - we need to implement a new encode_morse function  to deal with binary elements
 			pass
-		elif status_menu:
+		elif mode == 3:
 			#handle menu commands here
+			cmdstring = decode_buffer(keyer_buffer) #is none if buffer contains characters that cannot be decoded
+			if cmdstring:
+				if exec_cmd: #check if command - means this is a parameter (2nd part for a command)
+
+					if exec_cmd == 'qrg':
+						global current_channel
+						if keyer_buffer == '?': #tell QRG
+							play_string_as_morse(current_channel, cmd_sidetone, wpm)
+						elif keyerbuffer and not len([i for i in keyerbuffer if not i.isdigit()]) #contains only numbers  #channel numbers
+							global = channels
+							if 0 <= int(keyer_buffer)-1 <= len(channels): #check if channel number is valid!!!
+								current_channel = int(keyer_buffer)-1
+								play_string_as_morse('r qrg %i %s' %(current_channel,channels[current_channel][0]), cmd_sidetone, wpm) #channel  no and name
+							else:
+								play_string_as_morse('?', cmd_sidetone, wp) #did not understand parameter
+						else:
+							play_string_as_morse('?', cmd_sidetone, wpm) #did not understand cmd
+						exec_cmd = None
+						keyer_buffer = ''
+						mode = 3 #go back to cmd mode
+
+					if exec_cmd == 'nc':
+						global current_network
+						if keyer_buffer == '?': #tell network
+							play_string_as_morse(current_network, cmd_sidetone, wpm)
+						elif keyer_buffer == 'a': #go to accesspoint mode
+							pass #TODO execute setup network with 'a'
+							play_string_as_morse('r ap', cmd_sidetone, wpm)
+						elif keyer_buffer and not len([i for i in keyerbuffer if not i.isdigit()]) #contains only numbers  #network numbers
+							global = networks
+							if 0 <= int(keyer_buffer)-1 <= len(channels): #check if channel number is valid
+								if not current_network == int(keyer_buffer)-1:
+									current_network = int(keyer_buffer)-1
+									#TODO: excute setup network with entry number' '
+								play_string_as_morse('r %i %s' %(current_network ,networks[current_network][1]), cmd_sidetone, wpm)
+							else:
+								play_string_as_morse('?', cmd_sidetone, wp) #did not understand parameter
+						else:
+							play_string_as_morse('?', cmd_sidetone, wpm) #did not understand cmd
+						exec_cmd = None
+						keyer_buffer = ''
+						mode = 3 #go back to cmd mode
+
+
+					if exec_cmd == 'wpm':
+						global wpm
+						if keyer_buffer == '?': #tell wpm
+							play_string_as_morse(wpm, cmd_sidetone, wpm) 
+						elif keyerbuffer and not len([i for i in keyerbuffer if not i.isdigit()]) #contains only numbers
+							if 4 < int(keyer_buffer) > 80:
+								wpm = int(keyer_buffer)
+								play_string_as_morse('wpm %i' %wpm, cmd_sidetone, wpm)
+							else:
+								play_string_as_morse('?', cmd_sidetone, wpm) #did not understand parameter
+						else:
+							play_string_as_morse('?', cmd_sidetone, wpm) #did not understand cmd
+						exec_cmd = None
+						keyer_buffer = ''
+						mode = 3 #go back to cmd mode
+
+					if exec_cmd == 'txt':
+						global tx_sidetone
+						if keyer_buffer == '?': #tell tx tone freq
+							play_string_as_morse(tx_sidetone, cmd_sidetone, wpm) 
+						elif keyerbuffer and not len([i for i in keyerbuffer if not i.isdigit()]) #contains only numbers
+							if 100 < int(keyer_buffer) > 900:
+								tx_sidetone = int(keyer_buffer)
+								play_string_as_morse('txt %i' %tx_sidetone, cmd_sidetone, wpm)
+							else:
+								play_string_as_morse('?', cmd_sidetone, wpm) #did not understand parameter
+						else:
+							play_string_as_morse('?', cmd_sidetone, wpm) #did not understand cmd
+						exec_cmd = None
+						keyer_buffer = ''
+						mode = 3 #go back to cmd mode
+
+
+					if exec_cmd == 'rxt':
+						global rx_sidetone
+						if keyer_buffer == '?': #tell tx tone freq
+							play_string_as_morse(rx_sidetone, cmd_sidetone, wpm) 
+						elif keyerbuffer and not len([i for i in keyerbuffer if not i.isdigit()]) #contains only numbers
+							if 100 < int(keyer_buffer) > 900:
+								rx_sidetone = int(keyer_buffer)
+								play_string_as_morse('rxt %i' %rx_sidetone, cmd_sidetone, wpm)
+							else:
+								play_string_as_morse('?', cmd_sidetone, wpm) #did not understand parameter
+						else:
+							play_string_as_morse('?', cmd_sidetone, wpm) #did not understand cmd
+						exec_cmd = None
+						keyer_buffer = ''
+						mode = 3 #go back to cmd mode
+
+
+					if exec_cmd == 'cmdt':
+						global cmd_sidetone
+						if keyer_buffer == '?': #tell tx tone freq
+							play_string_as_morse(cmd_sidetone, cmd_sidetone, wpm) 
+						elif keyerbuffer and not len([i for i in keyerbuffer if not i.isdigit()]) #contains only numbers
+							if 100 < int(keyer_buffer) > 900:
+								cmd_sidetone = int(keyer_buffer)
+								play_string_as_morse('txt %i' %cmd_sidetone, cmd_sidetone, wpm)
+							else:
+								play_string_as_morse('?', cmd_sidetone, wpm) #did not understand parameter
+						else:
+							play_string_as_morse('?', cmd_sidetone, wpm) #did not understand cmd
+						exec_cmd = None
+						keyer_buffer = ''
+						mode = 3 #go back to cmd mode
+
+			#check for commands
+				if cmdstring == 'qrt': #off
+					exec_cmd = None
+					mode = 0
+				elif cmdstring == 'q': #leave cmd mode
+					exec_cmd = None
+					mode = 1 #go back to rx mode
+				elif cmdstring == 'qtr': #announce time / depends on ntp and 
+					play_string_as_morse('qtr - - -', cmd_sidetone, wpm)
+					exec_cmd = None
+					keyer_buffer = ''
+					mode = 2 #go back to menu mode
+				elif cmdstring == '?': #TODO: list commands
+					play_string_as_morse("commands: ? q qrg qrt wpm rxt txt cmdt nc qtr",cmd_sidetone,wpm)
+					exec_cmd = None
+					keyer_buffer = ''
+					mode = 2 #go back to menu mode
+				elif cmdstring == 'qrg': #channel commads
+					exec_cmd = 'qrg'
+				elif cmdstring == 'wpm': #keyer speed
+					exec_cmd == 'wpm'
+				elif cmdstring == 'txt': #transmit side tone freq
+					exec_cmd == 'txt'
+				elif cmdstring == 'rxt': #receive tone freq
+					exec_cmd == 'rxt'
+				elif cmdstring == 'cmdt': #command tone freq
+					exec_cmd == 'cmdt'
+				elif cmdstring == 'nc': #network connect
+					exec_cmd == 'nc'
+
+			else:
+				#we did not understand
+				play_string_as_morse('?',cmd_sidetone,wpm)
 			pass
 		keyer_buffer=''
 
@@ -188,6 +344,7 @@ def process_keyer(caller):
 
 	global keyer_buffer
 	global last_key_time
+	global cmd_entered_time
 	ell = ditlen(wpm)
 
 	while right_paddle_closed or left_paddle_closed:
@@ -220,6 +377,11 @@ def process_keyer(caller):
 		last_key_time = None
 	#TODO: iambic modes??? 
 
+	if mode == 3 and  if cmd_entered_time and time.ticks_ms() >= cmd_entered_time + 10000: #comand mode for longer than 10secs?
+		mode = 1 #go back to rx mode
+		sidetone(cmd_sidetone,200) #emit 200ms tone
+		cmd_entered_time = None
+
 
 def play_string_as_morse(string, freq, wpm):
     '''plays the given string as morse code'''
@@ -245,7 +407,7 @@ def play_string_as_morse(string, freq, wpm):
 def play_recvd(unicodestring):
     '''play morse received via socket'''
     global keyer_buffer
-    global state_tx
+    global mode 
     p,s,wpm= decode_header(unicodestring)
     ell = ditlen(wpm)
 
@@ -279,10 +441,10 @@ def play_recvd(unicodestring):
 
 def receive()
 	'''checks for incomming messages and receives them '''
-	global state_tx
+	global mode
 	global ipcwsocket
 
-	if not state_tx or state_menu:
+	if mode == 1:
 		play_recvd(ipcwsocket.recv())
 
 
