@@ -9,19 +9,27 @@
 import machine, network, utime as time
 from ipcw import *
 
+#TODO: implementation of load_config() and save_config()
+#TODO: implement send_keyer_buffer()
+#TODO: clean up redundancies in process_keyer_puffer()
+#TODO: measure actial ADC battery levels with hardware
+#TODO: testing...
+#TODO: implement iambic modes and tune timing
+#TODO: implement txrx_delay and recive blocking through modes (tx blocks rx, ...)
+#TODO: implement webserver for configuration
+
 DEBUG=1
 ### configuration ###
 rx_port = 7373 #port for the receiver socket to listen on
-s_ssid = ''
-s_key = ''
 ap_ssid = 'ipcw_ap'
 ap_key = 'ipcw'
 ap_authmode = 0 #0 open, 1 wep, 2 wpa-psk, 3 WPA2, 4 wpa/wpa2-psk
 wpm = 20
-iambic_mode='a'
+iambic_mode='a' # a|b
 tx_sidetone = 550
 rx_sidetone = 600
-volume=500 #50%
+cmd_sidetone = 800
+volume = 500 #50% dutycycle
 txrx_delay = 500 #ms
 
 channels = [['255.255.255.255',7373,'LAN']]
@@ -32,30 +40,60 @@ networks = [
 sidetone_pin = 12
 left_paddle_pin = 5
 right_paddle_pin = 4
+battery_pin = 0
 
 pwm = machine.PWM(machine.Pin(sidetone_pin))
 left_paddle = machine.Pin(left_paddle_pin, mode=machine.Pin.IN, pull=machine.Pin.PULL_UP)
 right_paddle = machine.Pin(right_paddle_pin, mode=machine.Pin.IN, pull=machine.Pin.PULL_UP)
+batt = machine.ADC(0)
+
+batt_warning_v = 3.6
+batt_critical_v = 3.4
 
 ###########
 # state variables #
-ip_address = None #own ip address, will be set by setup_server function
-state_menu = False #are we in the menu?
+ip_address = None #own ip address, set by  setup_network()
 mode = 0 #0 off, 1 rx, 1 tx, 3 cmd
 exec_cmd = None
 cmd_entered_time = None
-current_channel = channels[0] #default channel 0
+current_channel = channels[0] #default channel 0,
 left_paddle_closed = False
 right_paddle_closed = False
 last_paddle_closed = None
 last_paddle_released = None
 last_key_time=None
-
 keyer_buffer=''
-sidetone_stop_time=None
+#sidetone_stop_time=None
 silence_stop_time=None
 ipcwsocket = None
 ###########
+
+
+def load_config():
+	'''load config from file, if we dont have one, make one'''
+	#TODO
+		
+	pass
+
+def save_config():
+	'''save variables to config file'''
+	#TODO
+	pass
+
+def deep_sleep(msecs):
+	'''put machine into deep sleep for msecs'''
+	rtc = machine.RTC()
+	rtc.irq(trigger=rtc.ALARM0, wake=machine.DEEPSLEEP)
+	rtc.alarm(rtc.ALARM0, msecs)
+	machine.deepsleep()
+
+def check_battery():
+	"periodically check battery voltage, issue warning  - lo batt - go to deepsleep if critical"
+	if batt.read() <= batt_warning_v:
+		play_string_as_morse("lo battery", cmd_sidetone, wpm)
+	elif batt.read() <= batt_critical_v:
+		mode = 0
+		deep_sleep(60*5000)
 
 def connect_to_network(network):
 	'''connect to given network, returns True|False'''
@@ -139,41 +177,22 @@ def setup_socket():
     else:
         return False
 
-
-def load_config():
-	'''load config from file, if we dont have one, make one'''
-	try:
-		
-	pass
-
-def save_config():
-	'''save variables to config file'''
-	pass
-
-def deep_sleep(msecs):
-	#configure RTC.ALARM0 to be able to wake the device
-	rtc = machine.RTC()
-	rtc.irq(trigger=rtc.ALARM0, wake=machine.DEEPSLEEP)
-	# set RTC.ALARM0 to fire after Xmilliseconds, waking the device
-	rtc.alarm(rtc.ALARM0, msecs)
-	#put the device to sleep
-	machine.deepsleep()
-
-
 def sidetone(freq, duration):
     '''emits a sidetone of given freq for duration'''
     ell = ditlen(wpm)
     pwm.duty(0)
     pwm.freq(freq)
     pwm.duty(volume)
-    sidetone_stop_time = time.ticks_ms + duration
-    silence_stop_time =  time.ticks_ms + duration + ell  #silence after the tone blocks new sidetone
+    timer = machine.Timer(1)
+    timer.init(mode=Timer.ONE_SHOT, period=duration, callback=stop_sidetone)
+    #sidetone_stop_time = time.ticks_ms + duration / ##we  use a timer now
+    silence_stop_time =  time.ticks_ms + duration + ell  #silence after the tone blocks new sidetone TODO: maybe find a way to do this with timer?
 
 def stop_sidetone():
 	'''this stops the sidetones. called by meinloop'''
-	if sidetone_stop_time and time.ticks_ms() >= sidetone_stop_time:
-		pwm.duty(0)
-		sidetone_stop_time = None
+##	if sidetone_stop_time and time.ticks_ms() >= sidetone_stop_time:
+	pwm.duty(0)
+##		sidetone_stop_time = None
 	if silence_stop_time and time.ticks_ms() >= silence_stop_time:
 		silence_stop_time = None
 
@@ -278,8 +297,23 @@ def process_keyer_buffer():
 									play_string_as_morse('r %i %s' %(current_network ,networks[current_network][1]), cmd_sidetone, wpm)
 							else:
 								play_string_as_morse('?', cmd_sidetone, wp) #did not understand parameter
+					else:
+						play_string_as_morse('?', cmd_sidetone, wpm) #did not understand cmd
+						exec_cmd = None
+						keyer_buffer = ''
+						mode = 3 #go back to cmd mode
+
+
+					if exec_cmd == 'km':
+						if keyer_buffer == '?': #tell keyer mode
+							play_string_as_morse(keyer_mode, cmd_sidetone, wpm) 
+						elif keyerbuffer and keyer_buffer == 'a' or keyer_buffer == 'b': #contains only numbers
+							iambic_mode = keyer_buffer
+							play_string_as_morse('keyer mode %s' %keyer_buffer, cmd_sidetone, wpm)
 						else:
-							play_string_as_morse('?', cmd_sidetone, wpm) #did not understand cmd
+							play_string_as_morse('?', cmd_sidetone, wpm) #did not understand parameter
+					else:
+						play_string_as_morse('?', cmd_sidetone, wpm) #did not understand cmd
 						exec_cmd = None
 						keyer_buffer = ''
 						mode = 3 #go back to cmd mode
@@ -353,6 +387,7 @@ def process_keyer_buffer():
 				if cmdstring == 'qrt': #off
 					exec_cmd = None
 					save_config()
+					play_string_as_morse('73 sk e e') #say good bye
 					mode = 0
 					deep_sleep(10000) #sleep for initial 10 secs
 				elif cmdstring == 'qt': #leave cmd mode
@@ -385,6 +420,8 @@ def process_keyer_buffer():
 					exec_cmd == 'cmdt'
 				elif cmdstring == 'nc': #network connect
 					exec_cmd == 'nc'
+				elif cmdstring == 'km': #keyer mode a|b
+					exec_cmd == 'km'
 
 			else:
 				#we did not understand
@@ -393,6 +430,10 @@ def process_keyer_buffer():
 		keyer_buffer=''
 
 
+def send_keyer_buffer():
+	'''MOPP create header, add keyerbuffer and send it through the socket'''
+	pass
+	
 def process_keyer(caller):
 	'''this function is called whenever a key is pressed. it has it'S own loop that is ended when it detects EOW'''
 
@@ -501,7 +542,6 @@ def receive():
 	if mode == 1:
 		play_recvd(ipcwsocket.recv())
 
-
 def wake():
 	'''called by mainloop to check if device is on or off'''
 	global mode
@@ -512,24 +552,36 @@ def wake():
 			if i <=2:
 				i+=1
 			else:
-				mode = 2 #goto rx mode
-				load_config()
+				mode = 2 #goto rx mode and continue in main()
+				play_string_as_morse('...-... hello',cmd_sidetone, wpm)
 		i=0
 		else: #go backt to deep sleep for 6s
 			deep_sleep(6000)
 
+
+def setup():
+	'''setup is called whenever we start the device or after we wake up'''
+	check_battery()
+	battery_timer = machine.Timer(4)
+	battery_timer.freq(1)
+	battery_timer.callback(check_Battery())
+
+	load_config()
+
+	if setup_network():
+		setup_socket()
+	else:
+		play_string_as_morse("network error",cmd_sidetone,wpm)
+
+
 def mainloop():
 	receive()
-	process_keyer()#process keying
-	process_paddles()#process paddle changes
-	stop_sidetone()#checks whether we need to stop a sidetone
-
+	process_keyer() #process keying
+	process_paddles() #process paddle changes
+	stop_sidetone() #checks whether we need to stop a sidetone TODO: Maybe use timers for this?
 
 if __name__ == '__main__':
-
 	wake() #check if we should start device
-	setup_network()
-	setup_socket()
-
+	setup()
 	while True:
 		mainloop()
