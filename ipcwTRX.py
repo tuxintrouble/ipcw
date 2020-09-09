@@ -19,6 +19,8 @@ from ipcw import *
 #TODO: implement webserver for configuration
 
 DEBUG=1
+moni_batt = False
+
 ### configuration ###
 rx_port = 7373 #port for the receiver socket to listen on
 ap_ssid = 'ipcw_ap'
@@ -34,13 +36,13 @@ txrx_delay = 500 #ms
 
 channels = [['255.255.255.255',7373,'LAN']]
 networks = [
-	[''ipcw_ap','ipcw'], #ssid, passphrase
+	['ipcw_ap','ipcw'] #ssid, passphrase
 ]
 ### Pins ###
-sidetone_pin = 12
-left_paddle_pin = 5
-right_paddle_pin = 4
-battery_pin = 0
+sidetone_pin = 12 #d6
+left_paddle_pin = 5 #d1
+right_paddle_pin = 4 #d2
+battery_pin = 0  #a0
 
 pwm = machine.PWM(machine.Pin(sidetone_pin))
 left_paddle = machine.Pin(left_paddle_pin, mode=machine.Pin.IN, pull=machine.Pin.PULL_UP)
@@ -72,7 +74,7 @@ ipcwsocket = None
 def load_config():
 	'''load config from file, if we dont have one, make one'''
 	#TODO
-		
+	#[ k for k,v in locals().iteritems() if v == my_var][0]
 	pass
 
 def save_config():
@@ -89,37 +91,38 @@ def deep_sleep(msecs):
 
 def check_battery():
 	"periodically check battery voltage, issue warning  - lo batt - go to deepsleep if critical"
-	if batt.read() <= batt_warning_v:
+	if moni_batt and batt.read() <= batt_warning_v:
 		play_string_as_morse("lo battery", cmd_sidetone, wpm)
-	elif batt.read() <= batt_critical_v:
+	elif moni_batt and batt.read() <= batt_critical_v:
 		mode = 0
 		deep_sleep(60*5000)
 
-def connect_to_network(network):
-	'''connect to given network, returns True|False'''
-    global ip_address
-    sta_if = network.WLAN(network.STA_IF)
-    ap_if = network.WLAN(network.AP_IF)
-    sta_if.active(True)
-    available_networks = sta_if.scan()
-    debug(available_networks[0])
-    #check if our network amongst the avalianble
-    if network[0].encode() in [n[0] for n in available_networks]:
-        debug("try connect to %s" %s_ssid )
-        sta_if.connect(network[0],network[1]) #ssid, key
-        time.sleep(3)
-        if sta_if.isconnected():
-            ip_address = sta_if.ifconfig()[0]
-            debug(sta_if.ifconfig()[0])
-            return True
-        else:
-            ip_address = None
-            return False
 
-def setup_accesspoint()
-    '''setup access_point'''
-    global ip_address
-    global current_network
+def connect_to_network(network):
+	'''connect to given network'''
+
+	global ip_address
+	sta_if = network.WLAN(network.STA_IF)
+	ap_if = network.WLAN(network.AP_IF)
+	sta_if.active(True)
+	available_networks = sta_if.scan()
+	debug(available_networks[0])
+	if network[0].encode() in [n[0] for n in available_networks]:
+		debug("try connect to %s" %s_ssid )
+		sta_if.connect(network[0],network[1]) #ssid, key
+		time.sleep(3)
+		if sta_if.isconnected():
+			ip_address = sta_if.ifconfig()[0]
+			debug(sta_if.ifconfig()[0])
+			return True
+		else:
+			ip_address = None
+			return False
+
+def setup_accesspoint():
+	'''setup access_point'''
+	global ip_address
+	global current_network
 	debug("make AP")
 	ap_if.active(True)
 	#check if ap_name is already used
@@ -131,12 +134,11 @@ def setup_accesspoint()
 	while ap_ssid.encode()in [n[0] for n in available_networks]:
 		ssid = ap_ssid+'_%i' %i #try counting up till we get an exclusive ssid
 		i +=1
-    ap_if.config(essid=ssid, password=ap_key, authmode=ap_authmode)
-    time.sleep(4)
-    ip_address = ap_if.ifconfig()[0]
-    sta_if.active(False)
-    current_network = None
-
+	ap_if.config(essid=ssid, password=ap_key, authmode=ap_authmode)
+	time.sleep(4)
+	ip_address = ap_if.ifconfig()[0]
+	sta_if.active(False)
+	current_network = None
 
 def setup_network(id=None): 
 	'''takes an index number of a network in the list or an 'a' for ap-mode, sets up ap-mode as fallback'''
@@ -152,7 +154,7 @@ def setup_network(id=None):
 			else:
 				current_network = None
 		#accesspoint as fallback
-		if current_network = None:
+		if current_network == None:
 			setup_accesspoint()
 	elif id == 'a':
 		setup_accesspoint()
@@ -164,29 +166,29 @@ def setup_network(id=None):
 		else:
 			current_network = None
 		#accesspoint as fallback
-		if current_network = None:
+		if current_network == None:
 			setup_accesspoint()
 
 
 def setup_socket():
-    #see if we have an ip address
-    global ipcwsocket
-    if ip_address:
-        ipcwsocket = ipcwSocket((ip_address,rx_port))
-        return True
-    else:
-        return False
+	#see if we have an ip address
+	global ipcwsocket
+	if ip_address:
+		ipcwsocket = ipcwSocket((ip_address,rx_port))
+		return True
+	else:
+		return False
 
 def sidetone(freq, duration):
-    '''emits a sidetone of given freq for duration'''
-    ell = ditlen(wpm)
-    pwm.duty(0)
-    pwm.freq(freq)
-    pwm.duty(volume)
-    timer = machine.Timer(1)
-    timer.init(mode=Timer.ONE_SHOT, period=duration, callback=stop_sidetone)
-    #sidetone_stop_time = time.ticks_ms + duration / ##we  use a timer now
-    silence_stop_time =  time.ticks_ms + duration + ell  #silence after the tone blocks new sidetone TODO: maybe find a way to do this with timer?
+	'''emits a sidetone of given freq for duration'''
+	ell = ditlen(wpm)
+	pwm.duty(0)
+	pwm.freq(freq)
+	pwm.duty(volume)
+	timer = machine.Timer(1)
+	timer.init(mode=Timer.ONE_SHOT, period=duration, callback=stop_sidetone)
+	#sidetone_stop_time = time.ticks_ms + duration / ##we  use a timer now
+	silence_stop_time =  time.ticks_ms + duration + ell  #silence after the tone blocks new sidetone TODO: maybe find a way to do this with timer?
 
 def stop_sidetone():
 	'''this stops the sidetones. called by meinloop'''
@@ -212,33 +214,33 @@ def right_paddle_released():
 
 
 def process_paddles():
-    '''check key pins for changes and change states, called by mainloop'''
-    global left_paddle_closed
-    global right_paddle_close
-    global last_paddle_closed
-    global last_paddle_released
+	'''check key pins for changes and change states, called by mainloop'''
+	global left_paddle_closed
+	global right_paddle_close
+	global last_paddle_closed
+	global last_paddle_released
 
-    if left_paddle() and not left_paddle_closed:
-    	left_paddle_pressed()
-    	left_paddle_closed = True
-    	last_paddle_closed = 'left'
+	if left_paddle() and not left_paddle_closed:
+		left_paddle_pressed()
+		left_paddle_closed = True
+		last_paddle_closed = 'left'
 
-    if not left_paddle() and left_paddle_closed:
-    	left_paddle_released()
-    	left_paddle_closed = False
-    	last_key_time=time.ticks_ms()
-    	last_paddle_released = 'left'
+	if not left_paddle() and left_paddle_closed:
+		left_paddle_released()
+		left_paddle_closed = False
+		last_key_time=time.ticks_ms()
+		last_paddle_released = 'left'
 
-    if right_paddle() and not right_paddle_closed:
-    	right_paddle_pressed()
-    	right_paddle_closed = True
-    	last_paddle_closed='right'
+	if right_paddle() and not right_paddle_closed:
+		right_paddle_pressed()
+		right_paddle_closed = True
+		last_paddle_closed='right'
 
-    if not right_paddle() and right_paddle_closed:
-    	right_paddle_released()
-    	right_paddle_closed = False
-    	last_key_time=time.ticks_ms()
-    	last_paddle_released = 'right'
+	if not right_paddle() and right_paddle_closed:
+		right_paddle_released()
+		right_paddle_closed = False
+		last_key_time=time.ticks_ms()
+		last_paddle_released = 'right'
 
 def process_keyer_buffer():
 	'''handles complete words, depending on what mode we are in. Only called by process_keyer()'''
@@ -500,39 +502,39 @@ def play_string_as_morse(string, freq, wpm):
 
 
 def play_recvd(unicodestring):
-    '''play morse received via socket'''
-    global keyer_buffer
-    global mode 
-    p,s,wpm= decode_header(unicodestring)
-    ell = ditlen(wpm)
+	'''play morse received via socket'''
+	global keyer_buffer
+	global mode 
+	p,s,wpm= decode_header(unicodestring)
+	ell = ditlen(wpm)
 
-    bytestring = unicodestring.decode()
-    bitstring = ''
-    for byte in bytestring:
-        integer = ord(byte)
-        #bitstring += f'{integer:08b}'
-        bitstring += zfill(bin(integer)[2:],8) #works in uPython
+	bytestring = unicodestring.decode()
+	bitstring = ''
+	for byte in bytestring:
+		integer = ord(byte)
+		#bitstring += f'{integer:08b}'
+		bitstring += zfill(bin(integer)[2:],8) #works in uPython
 
-    m_payload = bitstring[14:] #we just need the payload here
+	m_payload = bitstring[14:] #we just need the payload here
 
-    #play morse code elements
-    #changed sleep times  for compatibility with nonblocking sidetone, blocking through receiving a word
-    for i in range(0, len(m_payload),2):
-        sym = m_payload[i]+m_payload[i+1]
-        debug(sym)
-        if sym == '01': #a dit
-            sidetone(rx_sidetone,ell)
-            time.sleep_ms(ell*2) #dit+space
-        elif sym == '10': #a dah
-            sidetone(rx_sidetone,ell*4) #dah+space
-            #time.sleep_ms(ell)
-        elif sym == '00': #eoc
-            time.sleep_ms(ell*2) #eoc - 1space from previous element
-        elif sym == '11': #eow
-            time.sleep_ms(ell*6) #eow - 1space from previous element
-            return
-        else:
-            pass
+	#play morse code elements
+	#changed sleep times  for compatibility with nonblocking sidetone, blocking through receiving a word
+	for i in range(0, len(m_payload),2):
+		sym = m_payload[i]+m_payload[i+1]
+		debug(sym)
+		if sym == '01': #a dit
+			sidetone(rx_sidetone,ell)
+			time.sleep_ms(ell*2) #dit+space
+		elif sym == '10': #a dah
+			sidetone(rx_sidetone,ell*4) #dah+space
+			#time.sleep_ms(ell)
+		elif sym == '00': #eoc
+			time.sleep_ms(ell*2) #eoc - 1space from previous element
+		elif sym == '11': #eow
+			time.sleep_ms(ell*6) #eow - 1space from previous element
+			return
+		else:
+			pass
 
 def receive():
 	'''checks for incomming messages and receives them '''
@@ -555,8 +557,8 @@ def wake():
 				mode = 2 #goto rx mode and continue in main()
 				play_string_as_morse('...-... hello',cmd_sidetone, wpm)
 		i=0
-		else: #go backt to deep sleep for 6s
-			deep_sleep(6000)
+		#go backt to deep sleep for 6s
+		deep_sleep(6000)
 
 
 def setup():
