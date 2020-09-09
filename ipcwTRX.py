@@ -11,8 +11,7 @@ from ipcw import *
 
 DEBUG=1
 ### configuration ###
-tx_url = '255.255.255.255' #can be replace with a relay server 
-port = 7373
+rx_port = 7373 #port for the receiver socket to listen on
 s_ssid = ''
 s_key = ''
 ap_ssid = 'ipcw_ap'
@@ -26,7 +25,9 @@ volume=500 #50%
 txrx_delay = 500 #ms
 
 channels = [['255.255.255.255',7373,'LAN']]
-
+networks = [
+	[''ipcw_ap','ipcw'], #ssid, passphrase
+]
 ### Pins ###
 sidetone_pin = 12
 left_paddle_pin = 5
@@ -43,7 +44,7 @@ state_menu = False #are we in the menu?
 mode = 0 #0 off, 1 rx, 1 tx, 3 cmd
 exec_cmd = None
 cmd_entered_time = None
-current_channel=1
+current_channel = channels[0] #default channel 0
 left_paddle_closed = False
 right_paddle_closed = False
 last_paddle_closed = None
@@ -56,58 +57,107 @@ silence_stop_time=None
 ipcwsocket = None
 ###########
 
-def setup_network(): #TODO: change to take 'a' or network number int as argument and to user networks[[ssid,key,authmode]]
+def connect_to_network(network):
+	'''connect to given network, returns True|False'''
     global ip_address
     sta_if = network.WLAN(network.STA_IF)
     ap_if = network.WLAN(network.AP_IF)
     sta_if.active(True)
-    networks = sta_if.scan()
-    debug(networks[0])
-    #check if we can connect to s_ssid
-    if s_ssid.encode() in [n[0] for n in networks]:
+    available_networks = sta_if.scan()
+    debug(available_networks[0])
+    #check if our network amongst the avalianble
+    if network[0].encode() in [n[0] for n in available_networks]:
         debug("try connect to %s" %s_ssid )
-        #connect to given ssid
-
-        sta_if.connect(s_ssid,s_key)
+        sta_if.connect(network[0],network[1]) #ssid, key
         time.sleep(3)
         if sta_if.isconnected():
             ip_address = sta_if.ifconfig()[0]
             debug(sta_if.ifconfig()[0])
-            return sta_if.ifconfig()[0]
+            return True
         else:
             ip_address = None
-            return None
+            return False
 
-    elif ap_ssid.encode() in [n[0] for n in networks]: #try if we find network named 'ipcw_ap'
-        debug("try ipcw_ap")
-        sta_if.connect(ap_ssid,ap_key)
-        time.sleep(3)
-        if sta_if.isconnected():
-            ip_address = sta_if.ifconfig()[0]
-            return sta_if.ifconfig()[0]
-        else:
-            ip_address = None
-            return None
+def setup_accesspoint()
+    '''setup access_point'''
+    global ip_address
+    global current_network
+	debug("make AP")
+	ap_if.active(True)
+	#check if ap_name is already used
+	if not sta_if.active():
+		sta_if.active(True)
+	available_networks =sta_if.scan()
+	ssid = ap_ssid
+	i = 1
+	while ap_ssid.encode()in [n[0] for n in available_networks]:
+		ssid = ap_ssid+'_%i' %i #try counting up till we get an exclusive ssid
+		i +=1
+    ap_if.config(essid=ssid, password=ap_key, authmode=ap_authmode)
+    time.sleep(4)
+    ip_address = ap_if.ifconfig()[0]
+    sta_if.active(False)
+    current_network = None
 
-    #setup access_point
-    else:
-        debug("make AP")
-        ap_if.active(True)
-        ap_if.config(essid=ap_ssid, password=ap_key, authmode=ap_authmode)
-        time.sleep(4)
-        ip_address = ap_if.ifconfig()[0]
-        sta_if.active(False)
-        return ap_if.ifconfig()[0]
+
+def setup_network(id=None): 
+	'''takes an index number of a network in the list or an 'a' for ap-mode, sets up ap-mode as fallback'''
+	global current_network
+	global ip_address
+	if id == None: #no id given - use first that works
+		for network in networks:
+			if connect_to_network(network):
+				current_network = network
+				ap_if.active(False) #deactivate accesspoint
+				ip_address = sta_if.ifconfig()[0]
+				break
+			else:
+				current_network = None
+		#accesspoint as fallback
+		if current_network = None:
+			setup_accesspoint()
+	elif id == 'a':
+		setup_accesspoint()
+	elif id and id != 'a':
+		if connect_to_network[id -1]:
+			current_network = network[id -1]
+			ap_if.active(False) #deactivate accesspoint
+			ip_address = sta_if.ifconfig()[0]
+		else:
+			current_network = None
+		#accesspoint as fallback
+		if current_network = None:
+			setup_accesspoint()
 
 
 def setup_socket():
     #see if we have an ip address
     global ipcwsocket
     if ip_address:
-        ipcwsocket = ipcwSocket((ip_address,port))
+        ipcwsocket = ipcwSocket((ip_address,rx_port))
         return True
     else:
         return False
+
+
+def load_config():
+	'''load config from file, if we dont have one, make one'''
+	try:
+		
+	pass
+
+def save_config():
+	'''save variables to config file'''
+	pass
+
+def deep_sleep(msecs):
+	#configure RTC.ALARM0 to be able to wake the device
+	rtc = machine.RTC()
+	rtc.irq(trigger=rtc.ALARM0, wake=machine.DEEPSLEEP)
+	# set RTC.ALARM0 to fire after Xmilliseconds, waking the device
+	rtc.alarm(rtc.ALARM0, msecs)
+	#put the device to sleep
+	machine.deepsleep()
 
 
 def sidetone(freq, duration):
@@ -189,13 +239,11 @@ def process_keyer_buffer():
 			else:
 				mode = 2 #go in tx mode
 				#TODO: send it - we need to implement a new encode_morse function  to deal with binary elements
-			pass
 		elif mode == 3:
 			#handle menu commands here
 			cmdstring = decode_buffer(keyer_buffer) #is none if buffer contains characters that cannot be decoded
 			if cmdstring:
 				if exec_cmd: #check if command - means this is a parameter (2nd part for a command)
-
 					if exec_cmd == 'qrg':
 						global current_channel
 						if keyer_buffer == '?': #tell QRG
@@ -212,21 +260,22 @@ def process_keyer_buffer():
 						exec_cmd = None
 						keyer_buffer = ''
 						mode = 3 #go back to cmd mode
-
 					if exec_cmd == 'nc':
 						global current_network
 						if keyer_buffer == '?': #tell network
-							play_string_as_morse(current_network, cmd_sidetone, wpm)
+							if current_network:
+								play_string_as_morse('%i %s'%(networks.index(current_network)+1,current_network[0]), cmd_sidetone, wpm) #id ssid
+							else:
+								play_string_as_morse(ap_ssid, cmd_sidetone, wpm) #ssid of ap
 						elif keyer_buffer == 'a': #go to accesspoint mode
-							pass #TODO execute setup network with 'a'
-							play_string_as_morse('r ap', cmd_sidetone, wpm)
+							setup_network('a')
+							play_string_as_morse('r ap %s' %ap_ssid, cmd_sidetone, wpm)
 						elif keyer_buffer and not len([i for i in keyerbuffer if not i.isdigit()]): #contains only numbers  #network numbers
 							global networks
-							if int(keyer_buffer)-1 >= 0 and int(keyer_buffer)-1 <= len(channels): #check if channel number is valid
+							if int(keyer_buffer)-1 >= 0 and int(keyer_buffer)-1 <= len(channels): #check ifnetwork number is valid
 								if not current_network == int(keyer_buffer)-1:
-									current_network = int(keyer_buffer)-1
-									#TODO: excute setup network with entry number' '
-								play_string_as_morse('r %i %s' %(current_network ,networks[current_network][1]), cmd_sidetone, wpm)
+									setup_network(int(keyer_buffer)-1)
+									play_string_as_morse('r %i %s' %(current_network ,networks[current_network][1]), cmd_sidetone, wpm)
 							else:
 								play_string_as_morse('?', cmd_sidetone, wp) #did not understand parameter
 						else:
@@ -303,8 +352,10 @@ def process_keyer_buffer():
 			#check for commands
 				if cmdstring == 'qrt': #off
 					exec_cmd = None
+					save_config()
 					mode = 0
-				elif cmdstring == 'q': #leave cmd mode
+					deep_sleep(10000) #sleep for initial 10 secs
+				elif cmdstring == 'qt': #leave cmd mode
 					exec_cmd = None
 					mode = 1 #go back to rx mode
 				elif cmdstring == 'qtr': #announce time / depends on ntp and 
@@ -314,6 +365,11 @@ def process_keyer_buffer():
 					mode = 2 #go back to menu mode
 				elif cmdstring == '?': #TODO: list commands
 					play_string_as_morse("commands: ? q qrg qrt wpm rxt txt cmdt nc qtr",cmd_sidetone,wpm)
+					exec_cmd = None
+					keyer_buffer = ''
+					mode = 2 #go back to menu mode
+				elif cmdstring == 'ip': #tell IP address
+					play_string_as_morse("ip %s" %ip_address ,cmd_sidetone,wpm)
 					exec_cmd = None
 					keyer_buffer = ''
 					mode = 2 #go back to menu mode
@@ -446,6 +502,22 @@ def receive():
 		play_recvd(ipcwsocket.recv())
 
 
+def wake():
+	'''called by mainloop to check if device is on or off'''
+	global mode
+	if mode == 0:
+		i=0
+		while left_paddle() and right_paddle(): #paddles squeezed for at least 3secs
+			t = time.sleep(3)
+			if i <=2:
+				i+=1
+			else:
+				mode = 2 #goto rx mode
+				load_config()
+		i=0
+		else: #go backt to deep sleep for 6s
+			deep_sleep(6000)
+
 def mainloop():
 	receive()
 	process_keyer()#process keying
@@ -454,6 +526,8 @@ def mainloop():
 
 
 if __name__ == '__main__':
+
+	wake() #check if we should start device
 	setup_network()
 	setup_socket()
 
